@@ -10,13 +10,28 @@
     --text:#1b2c47; --muted:#61748d; --accent:#1d4ed8; --navy:#173a6b;
     --sky:#7fb2f5; --profit:#15803d;
     --warn:#9a6200; --danger:#d64545;
+    --card-bg:#152a52; --card-row:#1d3a6b; --card-alt:#14532d;
+    --card-text:#e9f0fd; --card-muted:#9db4d8;
+    --pos-light:#4ade80; --neg-light:#f87171; --warn-light:#fbbf24;
   }
   *{box-sizing:border-box}
   body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0;padding:16px;max-width:1500px;margin-inline:auto}
   h1{font-size:1.5rem;margin:8px 0 4px}
   h2{font-size:1.15rem;margin:28px 0 10px;color:var(--navy)}
   p.sub{color:var(--muted);margin:0 0 16px;font-size:.9rem}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;overflow-x:auto}
+  .card{background:var(--card-bg);border:1px solid #2b4a80;border-radius:12px;padding:16px;margin-bottom:16px;overflow-x:auto;color:var(--card-text)}
+  .card h3{color:#dce8ff}
+  .card th{color:var(--card-muted)}
+  .card td{color:var(--card-text)}
+  .card tbody tr:nth-child(odd){background:var(--card-row)}
+  .card tbody tr:nth-child(even){background:var(--card-alt)}
+  .card tr.total td{border-top-color:var(--sky)}
+  .card .pos{color:var(--pos-light)} .card .neg{color:var(--neg-light)}
+  .card .dup-warn{color:var(--warn-light)}
+  .card .placed-count,.card .stake-ctl{color:var(--card-muted)}
+  .card .field label{color:var(--card-muted)}
+  .card input[type=checkbox]{accent-color:var(--sky)}
+  .card .btn-danger{color:var(--neg-light);border-color:var(--neg-light)}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
   .field{display:flex;flex-direction:column;gap:4px;min-width:0}
   .field label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
@@ -182,7 +197,7 @@ function renderParlays(){
   let totBet=0, totPay=0, anyAnchorDup=false;
   if(state.alts.length===0){
     const tr=document.createElement("tr");
-    tr.innerHTML='<td colspan="13" style="color:var(--muted)">Add an alternative below to build your first ticket.</td>';
+    tr.innerHTML='<td colspan="13" style="color:var(--card-muted)">Add an alternative below to build your first ticket.</td>';
     tb.appendChild(tr);
   }
   state.alts.forEach((r,i)=>{
