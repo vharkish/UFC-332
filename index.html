@@ -16,7 +16,7 @@
   h1{font-size:1.5rem;margin:8px 0 4px}
   h2{font-size:1.15rem;margin:28px 0 10px;color:var(--navy)}
   p.sub{color:var(--muted);margin:0 0 16px;font-size:.9rem}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;overflow-x:auto}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
   .field{display:flex;flex-direction:column;gap:4px;min-width:0}
   .field label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
@@ -43,7 +43,8 @@
   .dup-warn{color:var(--warn);font-size:.8rem;margin-top:4px}
   .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
   footer{color:var(--muted);font-size:.8rem;margin-top:32px;text-align:center}
-  @media(max-width:640px){ th:nth-child(4),td:nth-child(4){display:none} }
+  #parlayTable input[data-k="name"]{min-width:96px}
+  @media(max-width:640px){ #singleTable th:nth-child(4),#singleTable td:nth-child(4){display:none} }
 </style>
 </head>
 <body>
@@ -58,16 +59,11 @@
 
 <h2>3-Leg Parlay Builder</h2>
 <div class="card">
-  <div class="row">
-    <div class="field grow"><label>Anchor 1</label><input id="a1name" list="fighters" placeholder="Fighter name"></div>
-    <div class="field"><label>Odds</label><input id="a1odds" type="number" placeholder="-535"></div>
-    <div class="field grow"><label>Anchor 2</label><input id="a2name" list="fighters" placeholder="Fighter name"></div>
-    <div class="field"><label>Odds</label><input id="a2odds" type="number" placeholder="-218"></div>
-  </div>
   <datalist id="fighters"></datalist>
+  <div class="dup-warn" id="dupWarn" hidden>⚠️ Anchor 1 and Anchor 2 are the same fighter.</div>
   <table id="parlayTable">
     <thead><tr>
-      <th>#</th><th>Alternative</th><th class="num">Odds</th><th class="num">Bet $</th>
+      <th>#</th><th>Anchor 1</th><th class="num">Odds</th><th>Anchor 2</th><th class="num">Odds</th><th>Alternative</th><th class="num">Odds</th><th class="num">Bet $</th>
       <th class="num">Parlay</th><th class="num">Payout</th><th class="num">Profit</th><th class="num">ROI %</th><th></th>
     </tr></thead>
     <tbody></tbody>
@@ -133,31 +129,46 @@ function refreshDatalist(){
 function keepFocus(tbody){
   const a=document.activeElement;
   if(!a||!a.dataset||a.dataset.i===undefined||!tbody.contains(a)) return null;
-  return {i:a.dataset.i,k:a.dataset.k,s:a.selectionStart,e:a.selectionEnd};
+  let s=0,e=0;
+  try{ s=a.selectionStart; e=a.selectionEnd; }catch(_){}
+  return {i:a.dataset.i,k:a.dataset.k,r:a.dataset.r||"",s:s,e:e};
 }
 function restoreFocus(tbody,f){
   if(!f) return;
-  const el=tbody.querySelector('input[data-i="'+f.i+'"][data-k="'+f.k+'"]');
+  let sel='input[data-i="'+f.i+'"][data-k="'+f.k+'"]';
+  if(f.r) sel+='[data-r="'+f.r+'"]';
+  const el=tbody.querySelector(sel);
   if(el){ el.focus(); try{ el.setSelectionRange(f.s,f.e); }catch(_){} }
 }
 
-/* ---------- parlay table ---------- */
+/* ---------- parlay table: one ticket per row ---------- */
 function renderParlays(){
   const tb=$("#parlayTable tbody");
   const focus=keepFocus(tb);
   tb.innerHTML="";
+  const nn=s=>String(s||"").trim().toLowerCase();
   const d1=dec(state.a1odds), d2=dec(state.a2odds);
+  const anchorDup=!!(nn(state.a1name)&&nn(state.a1name)===nn(state.a2name));
+  $("#dupWarn").hidden=!anchorDup;
   let totBet=0, totPay=0;
+  if(state.alts.length===0){
+    const tr=document.createElement("tr");
+    tr.innerHTML='<td colspan="13" style="color:var(--muted)">Add an alternative below to build your first ticket.</td>';
+    tb.appendChild(tr);
+  }
   state.alts.forEach((r,i)=>{
     const d3=dec(r.odds), bet=parseFloat(r.bet)||0;
     const d=d1*d2*d3, pay=bet*d, prof=pay-bet;
     if(isFinite(pay)){ totBet+=bet; totPay+=pay; }
-    const dup = r.name && (r.name.trim().toLowerCase()===(state.a1name||"").trim().toLowerCase()
-                        || r.name.trim().toLowerCase()===(state.a2name||"").trim().toLowerCase());
+    const altDup = nn(r.name) && (nn(r.name)===nn(state.a1name) || nn(r.name)===nn(state.a2name));
     const tr=document.createElement("tr");
     tr.innerHTML =
       `<td>${i+1}</td>`+
-      `<td><input data-i="${i}" data-k="name" list="fighters" value="${esc(r.name)}" placeholder="Fighter">${dup?'<div class="dup-warn">Same as an anchor — sportsbook will void this leg.</div>':""}</td>`+
+      `<td><input data-i="a1" data-r="${i}" data-k="name" list="fighters" value="${esc(state.a1name)}" placeholder="Anchor 1"></td>`+
+      `<td class="num"><input data-i="a1" data-r="${i}" data-k="odds" type="number" value="${esc(state.a1odds)}" placeholder="-200" style="text-align:right"></td>`+
+      `<td><input data-i="a2" data-r="${i}" data-k="name" list="fighters" value="${esc(state.a2name)}" placeholder="Anchor 2"></td>`+
+      `<td class="num"><input data-i="a2" data-r="${i}" data-k="odds" type="number" value="${esc(state.a2odds)}" placeholder="-200" style="text-align:right"></td>`+
+      `<td><input data-i="${i}" data-k="name" list="fighters" value="${esc(r.name)}" placeholder="Fighter">${altDup?'<div class="dup-warn">Same as an anchor — sportsbook will void this leg.</div>':""}</td>`+
       `<td class="num"><input data-i="${i}" data-k="odds" type="number" value="${esc(r.odds)}" placeholder="-200" style="text-align:right"></td>`+
       `<td class="num"><input data-i="${i}" data-k="bet" type="number" min="0" step="any" value="${esc(r.bet)}" placeholder="10" style="text-align:right"></td>`+
       `<td class="num"><strong>${amer(d)}</strong></td>`+
@@ -169,16 +180,28 @@ function renderParlays(){
   });
   const tf=$("#parlayTable tfoot");
   tf.innerHTML = state.alts.length
-    ? `<tr class="total"><td colspan="3">Total (${state.alts.length} tickets)</td><td class="num">${money(totBet)}</td><td></td><td class="num">${money(totPay)}</td><td class="num">${money(totPay-totBet)}</td><td></td><td></td></tr>` : "";
+    ? `<tr class="total"><td colspan="7">Total (${state.alts.length} tickets)</td><td class="num">${money(totBet)}</td><td></td><td class="num">${money(totPay)}</td><td class="num">${money(totPay-totBet)}</td><td></td><td></td></tr>` : "";
   tb.querySelectorAll("input").forEach(el=>el.addEventListener("input",e=>{
-    const i=+e.target.dataset.i, k=e.target.dataset.k;
-    if(k==="name"){
-      state.alts[i].name=e.target.value;
-      const o=oddsOf(e.target.value);
-      if(o!=="" && !state.alts[i].oddsManual) state.alts[i].odds=o;
+    const i=e.target.dataset.i, k=e.target.dataset.k;
+    if(i==="a1"||i==="a2"){
+      if(k==="name"){
+        state[i+"name"]=e.target.value;
+        const o=oddsOf(e.target.value);
+        if(o!=="" && !state[i+"oddsManual"]) state[i+"odds"]=o;
+      }else{
+        state[i+"odds"]=e.target.value;
+        state[i+"oddsManual"]=true;
+      }
     }else{
-      state.alts[i][k]=e.target.value;
-      if(k==="odds") state.alts[i].oddsManual=true;
+      const idx=+i;
+      if(k==="name"){
+        state.alts[idx].name=e.target.value;
+        const o=oddsOf(e.target.value);
+        if(o!=="" && !state.alts[idx].oddsManual) state.alts[idx].odds=o;
+      }else{
+        state.alts[idx][k]=e.target.value;
+        if(k==="odds") state.alts[idx].oddsManual=true;
+      }
     }
     save(); renderParlays();
   }));
@@ -293,22 +316,10 @@ function updatePlacedCounts(){
 }
 
 /* ---------- wire up ---------- */
-function anchorWire(nameSel, oddsSel, key){
-  $(nameSel).addEventListener("input",e=>{
-    state[key+"name"]=e.target.value;
-    if(!state[key+"oddsManual"]){ const o=oddsOf(e.target.value); if(o!==""){ state[key+"odds"]=o; $(oddsSel).value=o; } }
-    save(); renderParlays();
-  });
-  $(oddsSel).addEventListener("input",e=>{ state[key+"odds"]=e.target.value; state[key+"oddsManual"]=true; save(); renderParlays(); });
-}
-anchorWire("#a1name","#a1odds","a1");
-anchorWire("#a2name","#a2odds","a2");
 $("#addAlt").addEventListener("click",()=>{ state.alts.push({name:"",odds:"",bet:"10"}); save(); renderParlays(); });
 $("#addSingle").addEventListener("click",()=>{ state.singles.push({name:"",odds:"",bet:"100"}); save(); renderSingles(); });
 $("#loadUfc332").addEventListener("click",()=>{ refreshDatalist(); save(); renderParlays(); renderSingles(); alert("UFC 332 card loaded — fighter names now autocomplete with odds."); });
-$("#newEvent").addEventListener("click",()=>{ if(confirm("Clear everything and start a new event?")){ state={a1name:"",a1odds:"",a2name:"",a2odds:"",alts:[],singles:[],card:[]}; save(); syncAnchors(); renderParlays(); renderSingles(); } });
-
-function syncAnchors(){ $("#a1name").value=state.a1name; $("#a1odds").value=state.a1odds; $("#a2name").value=state.a2name; $("#a2odds").value=state.a2odds; }
+$("#newEvent").addEventListener("click",()=>{ if(confirm("Clear everything and start a new event?")){ state={a1name:"",a1odds:"",a2name:"",a2odds:"",alts:[],singles:[],card:[],placed:{}}; save(); renderParlays(); renderSingles(); renderStrategies(); } });
 
 /* ---------- init ---------- */
 load(); refreshDatalist();
@@ -323,7 +334,7 @@ function backfillOdds(){
 }
 backfillOdds(); save();
 if(!state.placed) state.placed={};
-syncAnchors(); renderParlays(); renderSingles(); renderStrategies();
+renderParlays(); renderSingles(); renderStrategies();
 </script>
 </body>
 </html>
