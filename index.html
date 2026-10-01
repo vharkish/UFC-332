@@ -35,6 +35,11 @@
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   tr.total td{font-weight:700;border-top:2px solid var(--navy);border-bottom:none}
   .pos{color:var(--profit)} .neg{color:var(--danger)}
+  h3{font-size:1rem;color:var(--navy);margin:0 0 10px}
+  .placed-count{font-size:.8rem;color:var(--muted);font-weight:400}
+  tr.done td{opacity:.5;text-decoration:line-through}
+  tr.done td:last-child{opacity:1;text-decoration:none}
+  input[type=checkbox]{width:20px;height:20px;padding:0;background:none;border:none;accent-color:var(--navy);cursor:pointer;vertical-align:middle}
   .dup-warn{color:var(--warn);font-size:.8rem;margin-top:4px}
   .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
   footer{color:var(--muted);font-size:.8rem;margin-top:32px;text-align:center}
@@ -84,6 +89,10 @@
   <div class="btn-row"><button class="btn-primary" id="addSingle">+ Add fighter</button></div>
 </div>
 
+<h2>3 Leg Parlay Strategies</h2>
+<p class="sub">Your master plan — tick each ticket as you place it.</p>
+<div id="strategies"></div>
+
 <footer>For entertainment &amp; research. Know your limits — never bet more than you can afford to lose.</footer>
 
 <script>
@@ -98,7 +107,7 @@ const pct = n => isFinite(n) ? (n*100).toFixed(2)+"%" : "\u2014";
 
 /* ---------- state ---------- */
 const LS_KEY="ufc-bet-calc-v1";
-let state = { a1name:"", a1odds:"", a2name:"", a2odds:"", alts:[], singles:[], card:[] };
+let state = { a1name:"", a1odds:"", a2name:"", a2odds:"", alts:[], singles:[], card:[], placed:{} };
 
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
 function load(){ try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s) state=Object.assign(state,s); }catch(e){} }
@@ -224,6 +233,65 @@ function renderSingles(){
 
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
 
+/* ---------- 3-leg parlay strategies (master plan) ---------- */
+const STRATEGIES=[
+ {a1:"Anthony Wint",a2:"Ateba Gautier",bet:10,alts:["Damian Pinas","Natalia Silva","Jacobe Smith","Payton Talbott","Marcus McGhee","Alexander Hernandez","Eric Nolan","Johnny Walker"]},
+ {a1:"Damian Pinas",a2:"Jacobe Smith",bet:25,alts:["Natalia Silva","Ateba Gautier","Anthony Wint","Payton Talbott","Marcus McGhee","Alexander Hernandez","Eric Nolan","Johnny Walker"]},
+ {a1:"Natalia Silva",a2:"Damian Pinas",bet:10,alts:["Ateba Gautier","Jacobe Smith","Anthony Wint","Payton Talbott","Marcus McGhee","Alexander Hernandez","Eric Nolan","Johnny Walker"]},
+ {a1:"Damian Pinas",a2:"Payton Talbott",bet:10,alts:["Ateba Gautier","Natalia Silva","Anthony Wint","Jacobe Smith","Marcus McGhee","Alexander Hernandez","Eric Nolan","Johnny Walker"]}
+];
+
+function placedCount(si){ let p=0; STRATEGIES[si].alts.forEach((_,ri)=>{ if(state.placed[si+"-"+ri]) p++; }); return p; }
+
+function renderStrategies(){
+  const host=$("#strategies"); host.innerHTML="";
+  let gBet=0,gPay=0,gTotal=0;
+  STRATEGIES.forEach((s,si)=>{
+    const d1=dec(oddsOf(s.a1)), d2=dec(oddsOf(s.a2));
+    const card=document.createElement("div"); card.className="card";
+    let tBet=0,tPay=0,rows="";
+    s.alts.forEach((alt,ri)=>{
+      const d=d1*d2*dec(oddsOf(alt)), pay=s.bet*d, prof=pay-s.bet;
+      const key=si+"-"+ri, done=!!state.placed[key];
+      if(isFinite(pay)){ tBet+=s.bet; tPay+=pay; }
+      rows+='<tr class="'+(done?"done":"")+'"><td>'+(ri+1)+'</td><td>'+esc(alt)+'</td>'
+        +'<td class="num"><strong>'+amer(d)+'</strong></td><td class="num">'+money(s.bet)+'</td>'
+        +'<td class="num">'+money(pay)+'</td><td class="num '+(prof>0?"pos":"")+'">'+money(prof)+'</td>'
+        +'<td class="num">'+pct(s.bet>0?prof/s.bet:NaN)+'</td>'
+        +'<td class="num">'+(isFinite(pay)?(pay/s.bet).toFixed(2):"—")+'</td>'
+        +'<td><input type="checkbox" data-s="'+si+'" data-r="'+ri+'"'+(done?" checked":"")+' aria-label="Ticket placed"></td></tr>';
+    });
+    gBet+=tBet; gPay+=tPay; gTotal+=s.alts.length;
+    card.innerHTML='<h3>Strategy '+(si+1)+': '+esc(s.a1)+' + '+esc(s.a2)+' <span class="placed-count" data-sc="'+si+'">('+placedCount(si)+'/'+s.alts.length+' placed)</span></h3>'
+      +'<table><thead><tr><th>#</th><th>Alternative</th><th class="num">Odds</th><th class="num">Bet</th>'
+      +'<th class="num">Payout</th><th class="num">Profit</th><th class="num">ROI %</th><th class="num">ROS</th><th title="Ticket placed">✓</th></tr></thead>'
+      +'<tbody>'+rows+'</tbody>'
+      +'<tfoot><tr class="total"><td colspan="3">Strategy total</td><td class="num">'+money(tBet)+'</td>'
+      +'<td class="num">'+money(tPay)+'</td><td class="num">'+money(tPay-tBet)+'</td><td></td><td></td><td></td></tr></tfoot></table>';
+    host.appendChild(card);
+  });
+  const sum=document.createElement("div"); sum.className="card";
+  sum.innerHTML='<strong>Master plan total:</strong> '+gTotal+' tickets · <span data-gplaced>'+grandPlaced()+'</span> placed · '
+    +'Stake <strong>'+money(gBet)+'</strong> · If all hit: <strong>'+money(gPay)+'</strong> payout, '
+    +'<strong class="pos">'+money(gPay-gBet)+'</strong> profit';
+  host.appendChild(sum);
+  host.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.addEventListener("change",e=>{
+    const key=e.target.dataset.s+"-"+e.target.dataset.r;
+    const tr=e.target.closest("tr");
+    if(e.target.checked){ state.placed[key]=true; tr.classList.add("done"); }
+    else{ delete state.placed[key]; tr.classList.remove("done"); }
+    save(); updatePlacedCounts();
+  }));
+}
+function grandPlaced(){ return Object.keys(state.placed).filter(k=>state.placed[k]).length; }
+function updatePlacedCounts(){
+  STRATEGIES.forEach((s,si)=>{
+    const el=document.querySelector('[data-sc="'+si+'"]');
+    if(el) el.textContent='('+placedCount(si)+'/'+s.alts.length+' placed)';
+  });
+  const ge=document.querySelector('[data-gplaced]'); if(ge) ge.textContent=grandPlaced();
+}
+
 /* ---------- wire up ---------- */
 function anchorWire(nameSel, oddsSel, key){
   $(nameSel).addEventListener("input",e=>{
@@ -254,7 +322,8 @@ function backfillOdds(){
   }));
 }
 backfillOdds(); save();
-syncAnchors(); renderParlays(); renderSingles();
+if(!state.placed) state.placed={};
+syncAnchors(); renderParlays(); renderSingles(); renderStrategies();
 </script>
 </body>
 </html>
