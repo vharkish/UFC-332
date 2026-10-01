@@ -86,6 +86,17 @@
   #statsTable thead th.fight-th{position:sticky;left:0;z-index:3;background:#0a1a38}
   #statsTable td.fight-cell{position:sticky;left:0;z-index:1;font-weight:800;color:#fff;background:#24457e}
   #statsTable td.fight-cell:hover{background:#2c5294}
+  #statsTable tbody tr.hl-green td[data-r]{background:#d7f0d7}
+  #statsTable tbody tr.hl-green td.fight-cell{background:#1e8e4e;color:#fff}
+  #statsTable tbody tr.hl-yellow td[data-r]{background:#fff3bf}
+  #statsTable tbody tr.hl-yellow td.fight-cell{background:#d9a40a;color:#3a2c00}
+  #statsTable tbody tr.hl-red td[data-r]{background:#fbdcdc}
+  #statsTable tbody tr.hl-red td.fight-cell{background:#c0392b;color:#fff}
+  .stat-ctx{position:fixed;z-index:9999;background:#fff;border:1px solid #c9d6ea;border-radius:10px;box-shadow:0 10px 30px rgba(10,30,60,.25);min-width:200px;overflow:hidden;font-size:.9rem}
+  .stat-ctx .ctx-title{padding:8px 12px;font-weight:800;background:#0e2145;color:#fff;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stat-ctx .ctx-item{padding:8px 12px;cursor:pointer;color:#1b2c47;font-weight:600}
+  .stat-ctx .ctx-item:hover{background:#eef3fa}
+  .stat-ctx .ctx-item.cur{background:#dbe7fb}
   .stats-tools{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
   .stats-tools input{max-width:280px}
   @media(max-width:640px){ #singleTable th:nth-child(4),#singleTable td:nth-child(4){display:none} }
@@ -157,7 +168,7 @@
 
 <div id="tab-stats" hidden>
 <h2>Fighter Stats</h2>
-<p class="sub">Your full UFC 332 research sheet — each fight stays together as one unit, however you sort. Click a header to sort, drag headers to rearrange, drag a header’s right edge to resize, click any cell to edit.</p>
+<p class="sub">Your full UFC 332 research sheet — each fight stays together as one unit, however you sort. Click a header to sort, drag headers to rearrange, drag a header’s right edge to resize, click any cell to edit, right-click a row to highlight your pick.</p>
 <div class="card">
   <div class="stats-tools">
     <input id="statFilter" type="text" placeholder="Filter fighters… (e.g. Silva, Brazil, KO)">
@@ -522,6 +533,7 @@ function renderStats(){
   const host=$("#statsTable");
   if(!state.statEdits) state.statEdits={};
   if(!state.statColWidths) state.statColWidths={};
+  if(!state.statHL) state.statHL={};
   if(!state.statColOrder||state.statColOrder.length!==STAT_COLS.length) state.statColOrder=STAT_COLS.map((_,i)=>i);
   const order=state.statColOrder;
   let pairs=[];
@@ -546,7 +558,8 @@ function renderStats(){
   pairs.forEach((p,pi)=>{
     const fl=fightLabel(p);
     [2*p,2*p+1].forEach(r=>{
-      html+='<tr><td class="fight-cell" title="'+esc(fl)+'">'+esc(fl)+"</td>"
+      const hl=state.statHL[r];
+      html+='<tr'+(hl?' class="hl-'+hl+'"':'')+'><td class="fight-cell" title="'+esc(fl)+'">'+esc(fl)+"</td>"
         +order.map(ci=>{
           const v=sval(r,ci), disp=ci===3?fmtOdds(v):(v==null?"":v);
           return '<td data-r="'+r+'" data-c="'+ci+'" contenteditable="true" spellcheck="false"'+(ci===14?' class="fighter-name"':'')+' title="'+esc(String(v==null?"":v))+'">'+esc(String(disp))+"</td>";
@@ -558,6 +571,7 @@ function renderStats(){
   host.innerHTML=html;
   wireStatsHeaders(host);
   wireStatsCells(host);
+  wireStatsCtx(host);
 }
 function wireStatsHeaders(host){
   host.querySelectorAll("th[data-fs]").forEach(th=>{
@@ -632,6 +646,45 @@ document.addEventListener("mouseup",()=>{
   document.querySelectorAll('#statsTable th[data-fs]').forEach(th=>{ th.draggable=(th.dataset.fs!=="fight"); });
   resizeState=null;
 });
+let statCtx=null;
+function closeStatCtx(){ if(statCtx){ statCtx.remove(); statCtx=null; } }
+function setStatHL(r,color){
+  if(color) state.statHL[r]=color; else delete state.statHL[r];
+  save(); renderStats();
+}
+function showStatCtx(r,x,y){
+  closeStatCtx();
+  const cur=state.statHL[r];
+  const m=document.createElement("div");
+  m.className="stat-ctx";
+  const item=(val,emoji,label)=>'<div class="ctx-item'+(cur===val?" cur":"")+'" data-hl="'+val+'">'+emoji+" "+label+"</div>";
+  m.innerHTML='<div class="ctx-title">'+esc(String(sval(r,14)||"Fighter"))+"</div>"
+    +item("green","\U0001F7E9","Will win \u2014 my pick")
+    +item("yellow","\U0001F7E8","Will lose \u2014 fade")
+    +item("red","\U0001F7E5","Stay away")
+    +'<div class="ctx-item" data-hl="">\u2715 Clear highlight</div>';
+  document.body.appendChild(m);
+  const w=m.offsetWidth, h=m.offsetHeight;
+  m.style.left=Math.min(x,window.innerWidth-w-8)+"px";
+  m.style.top=Math.min(y,window.innerHeight-h-8)+"px";
+  m.querySelectorAll(".ctx-item").forEach(it=>it.addEventListener("click",e=>{
+    e.stopPropagation(); setStatHL(r,it.dataset.hl||null); closeStatCtx();
+  }));
+  statCtx=m;
+}
+function wireStatsCtx(host){
+  host.querySelectorAll("tbody tr:not(.sep)").forEach(tr=>{
+    tr.addEventListener("contextmenu",e=>{
+      e.preventDefault();
+      const td=e.target&&e.target.closest?e.target.closest("td"):null;
+      if(!td||td.dataset.r===undefined||td.dataset.r==="") return;
+      showStatCtx(+td.dataset.r,e.clientX,e.clientY);
+    });
+  });
+}
+document.addEventListener("click",e=>{ if(statCtx&&!statCtx.contains(e.target)) closeStatCtx(); });
+document.addEventListener("scroll",()=>closeStatCtx(),true);
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeStatCtx(); });
 $("#statFilter").addEventListener("input",e=>{ statFilter=e.target.value.toLowerCase().trim(); renderStats(); });
 
 /* ---------- tabs ---------- */
