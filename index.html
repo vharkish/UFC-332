@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UFC Bet Calculator</title>
+<style>
+  :root{
+    --bg:#0f1115; --surface:#171b22; --surface2:#1e242e; --border:#2a3140;
+    --text:#e8ecf1; --muted:#9aa4b2; --accent:#3ddc84; --accent-dim:#1d5c3a;
+    --warn:#ffb020; --danger:#ff5d5d; --blue:#4da3ff;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;margin:0;padding:16px;max-width:1100px;margin-inline:auto}
+  h1{font-size:1.5rem;margin:8px 0 4px}
+  h2{font-size:1.15rem;margin:28px 0 10px;color:var(--accent)}
+  p.sub{color:var(--muted);margin:0 0 16px;font-size:.9rem}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+  .field{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .field label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .field.grow{flex:1 1 160px}
+  input,select{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:1rem;width:100%}
+  input:focus,select:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+  input[type=number]{max-width:130px}
+  button{cursor:pointer;border:none;border-radius:8px;padding:10px 16px;font-size:.95rem;font-weight:600}
+  .btn-primary{background:var(--accent);color:#06210f}
+  .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+  .btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger);padding:8px 12px;font-size:.85rem}
+  .btn-row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:.92rem}
+  th,td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--border)}
+  th{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr.total td{font-weight:700;border-top:2px solid var(--accent);border-bottom:none}
+  .pos{color:var(--accent)} .neg{color:var(--danger)}
+  .dup-warn{color:var(--warn);font-size:.8rem;margin-top:4px}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  footer{color:var(--muted);font-size:.8rem;margin-top:32px;text-align:center}
+  @media(max-width:640px){ th:nth-child(4),td:nth-child(4){display:none} }
+</style>
+</head>
+<body>
+
+<h1>UFC Bet Calculator</h1>
+<p class="sub">3-leg parlays &amp; single-fighter payouts. Type the odds, everything else calculates itself. Your card auto-saves in this browser.</p>
+
+<div class="toolbar">
+  <button class="btn-ghost" id="loadUfc332">Load UFC 332 card</button>
+  <button class="btn-ghost" id="newEvent">New event (clear)</button>
+</div>
+
+<h2>3-Leg Parlay Builder</h2>
+<div class="card">
+  <div class="row">
+    <div class="field grow"><label>Anchor 1</label><input id="a1name" list="fighters" placeholder="Fighter name"></div>
+    <div class="field"><label>Odds</label><input id="a1odds" type="number" placeholder="-535"></div>
+    <div class="field grow"><label>Anchor 2</label><input id="a2name" list="fighters" placeholder="Fighter name"></div>
+    <div class="field"><label>Odds</label><input id="a2odds" type="number" placeholder="-218"></div>
+  </div>
+  <datalist id="fighters"></datalist>
+  <table id="parlayTable">
+    <thead><tr>
+      <th>#</th><th>Alternative</th><th class="num">Odds</th><th class="num">Bet $</th>
+      <th class="num">Parlay</th><th class="num">Payout</th><th class="num">Profit</th><th class="num">ROI %</th><th></th>
+    </tr></thead>
+    <tbody></tbody>
+    <tfoot></tfoot>
+  </table>
+  <div class="btn-row"><button class="btn-primary" id="addAlt">+ Add alternative</button></div>
+</div>
+
+<h2>Single Fighters</h2>
+<div class="card">
+  <table id="singleTable">
+    <thead><tr>
+      <th>#</th><th>Fighter</th><th class="num">Odds</th><th class="num">Bet $</th>
+      <th class="num">Payout</th><th class="num">Profit</th><th class="num">ROI %</th><th></th>
+    </tr></thead>
+    <tbody></tbody>
+    <tfoot></tfoot>
+  </table>
+  <div class="btn-row"><button class="btn-primary" id="addSingle">+ Add fighter</button></div>
+</div>
+
+<footer>For entertainment &amp; research. Know your limits — never bet more than you can afford to lose.</footer>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+
+/* ---------- math ---------- */
+function dec(o){ o=parseFloat(o); if(!isFinite(o)||o===0) return NaN; return o>0 ? 1+o/100 : 1+100/Math.abs(o); }
+function amer(d){ if(!(d>1)) return "\u2014"; const v=Math.round((d-1)*100); return v>=0 ? "+"+v : ""+v; }
+const money = n => isFinite(n) ? "$"+n.toFixed(2) : "\u2014";
+const pct = n => isFinite(n) ? (n*100).toFixed(2)+"%" : "\u2014";
+
+/* ---------- state ---------- */
+const LS_KEY="ufc-bet-calc-v1";
+let state = { a1name:"", a1odds:"", a2name:"", a2odds:"", alts:[], singles:[], card:[] };
+
+function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
+function load(){ try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s) state=Object.assign(state,s); }catch(e){} }
+
+/* ---------- UFC 332 preset (odds as of fight week) ---------- */
+const UFC332 = [
+  ["Natalia Silva",-205],["Wang Cong",170],["Payton Talbott",-675],["Deiveson Figueiredo",490],
+  ["King Green",195],["Esteban Ribovics",-238],["Roberto Soldic",-265],["Khaos Williams",215],
+  ["Ateba Gautier",-218],["Roman Kopylov",180],["Imanol Rodriguez",-155],["Alden Coria",130],
+  ["Damian Pinas",-575],["Andrey Pulyaev",425],["Anthony Wint",-535],["Lucas Armand",400],
+  ["Marcus McGhee",-485],["Anthony Romero",370],["Mick Parkin",114],["Johnny Walker",-135],
+  ["Jacobe Smith",-1050],["Bruce Whitehead",675],["Rafael dos Anjos",185],["Alexander Hernandez",-225],
+  ["Court McGee",185],["Eric Nolan",-225],["Marvin Vettori",114],["Ismail Naurdiev",-135]
+];
+const oddsOf = n => { const f=UFC332.find(x=>x[0].toLowerCase()===String(n).toLowerCase()); return f?f[1]:""; };
+
+function refreshDatalist(){
+  const dl=$("#fighters"); dl.innerHTML="";
+  UFC332.forEach(([n])=>{ const o=document.createElement("option"); o.value=n; dl.appendChild(o); });
+}
+
+/* ---------- parlay table ---------- */
+function renderParlays(){
+  const tb=$("#parlayTable tbody"); tb.innerHTML="";
+  const d1=dec(state.a1odds), d2=dec(state.a2odds);
+  let totBet=0, totPay=0;
+  state.alts.forEach((r,i)=>{
+    const d3=dec(r.odds), bet=parseFloat(r.bet)||0;
+    const d=d1*d2*d3, pay=bet*d, prof=pay-bet;
+    if(isFinite(pay)){ totBet+=bet; totPay+=pay; }
+    const dup = r.name && (r.name.trim().toLowerCase()===(state.a1name||"").trim().toLowerCase()
+                        || r.name.trim().toLowerCase()===(state.a2name||"").trim().toLowerCase());
+    const tr=document.createElement("tr");
+    tr.innerHTML =
+      `<td>${i+1}</td>`+
+      `<td><input data-i="${i}" data-k="name" list="fighters" value="${esc(r.name)}" placeholder="Fighter">${dup?'<div class="dup-warn">Same as an anchor — sportsbook will void this leg.</div>':""}</td>`+
+      `<td class="num"><input data-i="${i}" data-k="odds" type="number" value="${esc(r.odds)}" placeholder="-200" style="text-align:right"></td>`+
+      `<td class="num"><input data-i="${i}" data-k="bet" type="number" min="0" step="any" value="${esc(r.bet)}" placeholder="10" style="text-align:right"></td>`+
+      `<td class="num"><strong>${amer(d)}</strong></td>`+
+      `<td class="num">${money(pay)}</td>`+
+      `<td class="num ${prof>0?"pos":prof<0?"neg":""}">${money(prof)}</td>`+
+      `<td class="num">${pct(bet>0?prof/bet:NaN)}</td>`+
+      `<td><button class="btn-danger" data-del="${i}">✕</button></td>`;
+    tb.appendChild(tr);
+  });
+  const tf=$("#parlayTable tfoot");
+  tf.innerHTML = state.alts.length
+    ? `<tr class="total"><td colspan="3">Total (${state.alts.length} tickets)</td><td class="num">${money(totBet)}</td><td></td><td class="num">${money(totPay)}</td><td class="num">${money(totPay-totBet)}</td><td></td><td></td></tr>` : "";
+  tb.querySelectorAll("input").forEach(el=>el.addEventListener("input",e=>{
+    const i=+e.target.dataset.i, k=e.target.dataset.k;
+    state.alts[i][k]=e.target.value;
+    if(k==="name" && !state.alts[i].odds){ const o=oddsOf(e.target.value); if(o!=="") state.alts[i].odds=o; }
+    save(); renderParlays();
+  }));
+  tb.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",e=>{
+    state.alts.splice(+e.target.dataset.del,1); save(); renderParlays();
+  }));
+}
+
+/* ---------- singles table ---------- */
+function renderSingles(){
+  const tb=$("#singleTable tbody"); tb.innerHTML="";
+  let totBet=0, totPay=0;
+  state.singles.forEach((r,i)=>{
+    const d=dec(r.odds), bet=parseFloat(r.bet)||0;
+    const pay=bet*d, prof=pay-bet;
+    if(isFinite(pay)){ totBet+=bet; totPay+=pay; }
+    const tr=document.createElement("tr");
+    tr.innerHTML =
+      `<td>${i+1}</td>`+
+      `<td><input data-i="${i}" data-k="name" list="fighters" value="${esc(r.name)}" placeholder="Fighter"></td>`+
+      `<td class="num"><input data-i="${i}" data-k="odds" type="number" value="${esc(r.odds)}" placeholder="-200" style="text-align:right"></td>`+
+      `<td class="num"><input data-i="${i}" data-k="bet" type="number" min="0" step="any" value="${esc(r.bet)}" placeholder="100" style="text-align:right"></td>`+
+      `<td class="num">${money(pay)}</td>`+
+      `<td class="num ${prof>0?"pos":prof<0?"neg":""}">${money(prof)}</td>`+
+      `<td class="num">${pct(bet>0?prof/bet:NaN)}</td>`+
+      `<td><button class="btn-danger" data-del="${i}">✕</button></td>`;
+    tb.appendChild(tr);
+  });
+  const tf=$("#singleTable tfoot");
+  tf.innerHTML = state.singles.length
+    ? `<tr class="total"><td colspan="3">Total (${state.singles.length} bets)</td><td class="num">${money(totBet)}</td><td class="num">${money(totPay)}</td><td class="num">${money(totPay-totBet)}</td><td></td><td></td></tr>` : "";
+  tb.querySelectorAll("input").forEach(el=>el.addEventListener("input",e=>{
+    const i=+e.target.dataset.i, k=e.target.dataset.k;
+    state.singles[i][k]=e.target.value;
+    if(k==="name" && !state.singles[i].odds){ const o=oddsOf(e.target.value); if(o!=="") state.singles[i].odds=o; }
+    save(); renderSingles();
+  }));
+  tb.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",e=>{
+    state.singles.splice(+e.target.dataset.del,1); save(); renderSingles();
+  }));
+}
+
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+
+/* ---------- wire up ---------- */
+$("#a1name").addEventListener("input",e=>{ state.a1name=e.target.value; save(); renderParlays(); });
+$("#a1odds").addEventListener("input",e=>{ state.a1odds=e.target.value; save(); renderParlays(); });
+$("#a2name").addEventListener("input",e=>{ state.a2name=e.target.value; save(); renderParlays(); });
+$("#a2odds").addEventListener("input",e=>{ state.a2odds=e.target.value; save(); renderParlays(); });
+$("#addAlt").addEventListener("click",()=>{ state.alts.push({name:"",odds:"",bet:"10"}); save(); renderParlays(); });
+$("#addSingle").addEventListener("click",()=>{ state.singles.push({name:"",odds:"",bet:"100"}); save(); renderSingles(); });
+$("#loadUfc332").addEventListener("click",()=>{ refreshDatalist(); save(); renderParlays(); renderSingles(); alert("UFC 332 card loaded — fighter names now autocomplete with odds."); });
+$("#newEvent").addEventListener("click",()=>{ if(confirm("Clear everything and start a new event?")){ state={a1name:"",a1odds:"",a2name:"",a2odds:"",alts:[],singles:[],card:[]}; save(); syncAnchors(); renderParlays(); renderSingles(); } });
+
+function syncAnchors(){ $("#a1name").value=state.a1name; $("#a1odds").value=state.a1odds; $("#a2name").value=state.a2name; $("#a2odds").value=state.a2odds; }
+
+/* ---------- init ---------- */
+load(); refreshDatalist(); syncAnchors(); renderParlays(); renderSingles();
+</script>
+</body>
+</html>
