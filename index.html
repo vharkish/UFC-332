@@ -102,6 +102,22 @@
   .picks-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .stat-count{font-size:.85rem;color:var(--card-muted);font-weight:600}
   #statsTable tr.empty-note td{padding:22px;text-align:center;color:var(--card-muted);font-weight:600;background:transparent;border:none}
+  .colset-ov{position:fixed;inset:0;background:rgba(8,20,40,.55);z-index:10000;display:flex;align-items:center;justify-content:center}
+  .colset{background:#fff;border-radius:14px;max-width:430px;width:92%;max-height:84vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35);color:#1b2c47}
+  .colset-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #dbe4f0;font-size:1rem}
+  .colset-x{background:none;font-size:1.1rem;color:#5b6b85;padding:6px 10px}
+  .colset-sub{padding:10px 16px;font-size:.82rem;color:#5b6b85}
+  .colset-list{overflow-y:auto;padding:4px 8px 12px}
+  .colset-row{display:flex;align-items:center;gap:4px;padding:5px 8px;border-radius:8px}
+  .colset-row:hover{background:#f0f4fb}
+  .colset-row.is-hidden .colset-name{color:#9aa7bd;text-decoration:line-through}
+  .colset-row button{background:#e8eef7;border:1px solid #c9d6ea;border-radius:6px;padding:4px 8px;font-size:.8rem;color:#1b2c47}
+  .colset-row button:hover{background:#d7e2f5}
+  .colset-row label{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:.9rem;flex:1;margin-left:4px}
+  .colset-row input[type=checkbox]{width:16px;height:16px;accent-color:#2f6df6}
+  .colset-row.locked{color:#5b6b85;font-size:.85rem;font-weight:600;padding:8px}
+  .colset-foot{display:flex;gap:10px;padding:12px 16px;border-top:1px solid #dbe4f0}
+  .colset-foot button{padding:8px 14px;font-size:.85rem}
   @media(max-width:640px){ #singleTable th:nth-child(4),#singleTable td:nth-child(4){display:none} }
 </style>
 </head>
@@ -176,6 +192,7 @@
   <div class="stats-tools">
     <input id="statFilter" type="text" placeholder="Filter fighters… (e.g. Silva, Brazil, KO)">
     <button id="picksToggle" class="btn-ghost picks-btn" title="Show only fighters you highlighted">★ Picks only</button>
+    <button id="colsSettings" class="btn-ghost" title="Reorder or hide columns">⚙ Columns</button>
     <span id="statCount" class="stat-count"></span>
   </div>
   <table id="statsTable"><thead></thead><tbody></tbody></table>
@@ -501,6 +518,10 @@ function colW(ci){
   if(ci==="fight") return 210;
   return defaultColW(ci);
 }
+function visOrder(){
+  if(!state.statColHidden) state.statColHidden={};
+  return state.statColOrder.filter(ci=>!state.statColHidden[ci]);
+}
 function statNum(v){
   const s=String(v==null?"":v).replace(/[%$,]/g,"").trim();
   if(s===""||s==="-") return null;
@@ -526,7 +547,7 @@ function pairRows(p){
 function pairMatches(p){
   const rows=pairRows(p), q=statFilter;
   if(!rows.length) return false;
-  const hit=r=>state.statColOrder.some(ci=>String(sval(r,ci)||"").toLowerCase().indexOf(q)>=0);
+  const hit=r=>visOrder().some(ci=>String(sval(r,ci)||"").toLowerCase().indexOf(q)>=0);
   return rows.some(hit)||fightLabel(p).toLowerCase().indexOf(q)>=0;
 }
 function pairVal(p,ci,dir){
@@ -549,7 +570,7 @@ function renderStats(){
   if(!state.statColWidths) state.statColWidths={};
   if(!state.statHL) state.statHL={};
   if(!state.statColOrder||state.statColOrder.length!==STAT_COLS.length) state.statColOrder=STAT_COLS.map((_,i)=>i);
-  const order=state.statColOrder;
+  const order=visOrder();
   let pairs=[];
   for(let p=0;p<STAT_ROWS.length/2;p++) if(pairRows(p).length&&(!statFilter||pairMatches(p))) pairs.push(p);
   if(statSort){
@@ -703,7 +724,62 @@ function wireStatsCtx(host){
 }
 document.addEventListener("click",e=>{ if(statCtx&&!statCtx.contains(e.target)) closeStatCtx(); });
 document.addEventListener("scroll",()=>closeStatCtx(),true);
-document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeStatCtx(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeStatCtx(); closeColSettings(); } });
+let colModal=null;
+function closeColSettings(){ if(colModal){ colModal.remove(); colModal=null; } }
+function moveStatCol(ci,mv){
+  const o=state.statColOrder.slice(), i=o.indexOf(ci);
+  if(i<0) return;
+  o.splice(i,1);
+  let at=i;
+  if(mv==="-top") at=0;
+  else if(mv==="bot") at=o.length;
+  else at=Math.min(o.length,Math.max(0,i+parseInt(mv,10)));
+  o.splice(at,0,ci);
+  state.statColOrder=o; save();
+}
+function openColSettings(){
+  closeColSettings();
+  const ov=document.createElement("div"); ov.className="colset-ov";
+  ov.innerHTML='<div class="colset" role="dialog" aria-label="Column settings">'
+    +'<div class="colset-head"><b>Column order &amp; visibility</b><button class="colset-x">\u2715</button></div>'
+    +'<div class="colset-sub">Arrows reorder, checkbox hides. The Fight column stays pinned on the left.</div>'
+    +'<div class="colset-list"></div>'
+    +'<div class="colset-foot"><button class="btn-ghost" data-act="showall">Show all</button><button class="btn-ghost" data-act="reset">Reset order</button></div>'
+    +"</div>";
+  document.body.appendChild(ov);
+  colModal=ov;
+  const list=ov.querySelector(".colset-list");
+  const render=()=>{
+    list.innerHTML='<div class="colset-row locked">\U0001F4CC Fight \u2014 pinned on the left</div>'
+      +state.statColOrder.map(ci=>{
+        const hidden=state.statColHidden&&state.statColHidden[ci];
+        const nm=STAT_COLS[ci]||("Column "+(ci+1));
+        return '<div class="colset-row'+(hidden?' is-hidden':'')+'">'
+          +'<button data-mv="-top" data-ci="'+ci+'" title="Move to top">\u23EB</button>'
+          +'<button data-mv="-1" data-ci="'+ci+'" title="Move up">\u2191</button>'
+          +'<button data-mv="1" data-ci="'+ci+'" title="Move down">\u2193</button>'
+          +'<button data-mv="bot" data-ci="'+ci+'" title="Move to bottom">\u23EC</button>'
+          +'<label><input type="checkbox" data-vis="'+ci+'"'+(hidden?"":" checked")+'><span class="colset-name">'+esc(nm)+"</span></label>"
+          +"</div>";
+      }).join("");
+    list.querySelectorAll("button[data-mv]").forEach(b=>b.addEventListener("click",()=>{
+      moveStatCol(+b.dataset.ci,b.dataset.mv); render(); renderStats();
+    }));
+    list.querySelectorAll("input[data-vis]").forEach(c=>c.addEventListener("change",()=>{
+      const ci=+c.dataset.vis;
+      if(!state.statColHidden) state.statColHidden={};
+      if(c.checked) delete state.statColHidden[ci]; else state.statColHidden[ci]=true;
+      save(); render(); renderStats();
+    }));
+  };
+  render();
+  ov.querySelector(".colset-x").addEventListener("click",closeColSettings);
+  ov.addEventListener("click",e=>{ if(e.target===ov) closeColSettings(); });
+  ov.querySelector('[data-act="showall"]').addEventListener("click",()=>{ state.statColHidden={}; save(); render(); renderStats(); });
+  ov.querySelector('[data-act="reset"]').addEventListener("click",()=>{ state.statColOrder=STAT_COLS.map((_,i)=>i); state.statColHidden={}; save(); render(); renderStats(); });
+}
+$("#colsSettings").addEventListener("click",openColSettings);
 $("#picksToggle").addEventListener("click",()=>{
   statPicksOnly=!statPicksOnly;
   $("#picksToggle").classList.toggle("on",statPicksOnly);
