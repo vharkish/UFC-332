@@ -32,6 +32,10 @@
   .card .field label{color:var(--card-muted)}
   .card input[type=checkbox]{accent-color:var(--sky)}
   .card .btn-danger{color:var(--neg-light);border-color:var(--neg-light)}
+  .anchor-badge{display:inline-block;padding:6px 16px;border-radius:999px;font-weight:800;font-size:1.05rem;color:#fff;margin:0 2px;vertical-align:middle;letter-spacing:.01em}
+  .anchor-badge.a1{background:#2563eb}
+  .anchor-badge.a2{background:#16a34a}
+  .anchor-plus{color:var(--card-muted);font-weight:700;margin:0 6px}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
   .field{display:flex;flex-direction:column;gap:4px;min-width:0}
   .field label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
@@ -327,7 +331,9 @@ function renderStrategies(){
         +'<td><input type="checkbox" data-s="'+si+'" data-r="'+ri+'"'+(done?" checked":"")+' aria-label="Ticket placed"></td></tr>';
     });
     gBet+=tBet; gPay+=tPay; gTotal+=s.alts.length;
-    card.innerHTML='<h3>Strategy '+(si+1)+': '+esc(s.a1)+' + '+esc(s.a2)+' <span class="placed-count" data-sc="'+si+'">('+placedCount(si)+'/'+s.alts.length+' placed)</span>'
+    card.innerHTML='<h3>Strategy '+(si+1)+': '
+      +'<span class="anchor-badge a1">'+esc(s.a1)+'</span><span class="anchor-plus">+</span><span class="anchor-badge a2">'+esc(s.a2)+'</span>'
+      +' <span class="placed-count" data-sc="'+si+'">('+placedCount(si)+'/'+s.alts.length+' placed)</span>'
       +'<span class="stake-ctl">Bet $ <input data-si="'+si+'" data-i="st'+si+'" data-k="bet" type="number" min="0" step="any" value="'+esc(betStr)+'"></span></h3>'
       +'<table><thead><tr><th>#</th><th>Alternative</th><th class="num">Odds</th><th class="num">Bet</th>'
       +'<th class="num">Payout</th><th class="num">Profit</th><th class="num">ROI %</th><th class="num">ROS</th><th title="Ticket placed">\u2713</th></tr></thead>'
