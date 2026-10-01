@@ -46,6 +46,8 @@
   #parlayTable input[data-k$="name"]{min-width:140px}
   #parlayTable input[type=number]{min-width:88px}
   #previewTable th[data-sort]{cursor:pointer;user-select:none;white-space:nowrap}
+  .stake-ctl{font-size:.85rem;color:var(--muted);font-weight:400;margin-left:10px;white-space:nowrap}
+  .stake-ctl input{display:inline-block;width:76px;padding:6px 8px;font-size:.9rem}
   @media(max-width:640px){ #singleTable th:nth-child(4),#singleTable td:nth-child(4){display:none} }
 </style>
 </head>
@@ -287,27 +289,33 @@ const STRATEGIES=[
 function placedCount(si){ let p=0; STRATEGIES[si].alts.forEach((_,ri)=>{ if(state.placed[si+"-"+ri]) p++; }); return p; }
 
 function renderStrategies(){
-  const host=$("#strategies"); host.innerHTML="";
+  const host=$("#strategies");
+  const focus=keepFocus(host);
+  host.innerHTML="";
+  if(!state.strategyBets) state.strategyBets={};
   let gBet=0,gPay=0,gTotal=0;
   STRATEGIES.forEach((s,si)=>{
+    const betStr=state.strategyBets[si]!==undefined?state.strategyBets[si]:s.bet;
+    const bet=parseFloat(betStr)||0;
     const d1=dec(oddsOf(s.a1)), d2=dec(oddsOf(s.a2));
     const card=document.createElement("div"); card.className="card";
     let tBet=0,tPay=0,rows="";
     s.alts.forEach((alt,ri)=>{
-      const d=d1*d2*dec(oddsOf(alt)), pay=s.bet*d, prof=pay-s.bet;
+      const d=d1*d2*dec(oddsOf(alt)), pay=bet*d, prof=pay-bet;
       const key=si+"-"+ri, done=!!state.placed[key];
-      if(isFinite(pay)){ tBet+=s.bet; tPay+=pay; }
+      if(isFinite(pay)){ tBet+=bet; tPay+=pay; }
       rows+='<tr class="'+(done?"done":"")+'"><td>'+(ri+1)+'</td><td>'+esc(alt)+'</td>'
-        +'<td class="num"><strong>'+amer(d)+'</strong></td><td class="num">'+money(s.bet)+'</td>'
+        +'<td class="num"><strong>'+amer(d)+'</strong></td><td class="num">'+money(bet)+'</td>'
         +'<td class="num">'+money(pay)+'</td><td class="num '+(prof>0?"pos":"")+'">'+money(prof)+'</td>'
-        +'<td class="num">'+pct(s.bet>0?prof/s.bet:NaN)+'</td>'
-        +'<td class="num">'+(isFinite(pay)?(pay/s.bet).toFixed(2):"—")+'</td>'
+        +'<td class="num">'+pct(bet>0?prof/bet:NaN)+'</td>'
+        +'<td class="num">'+(isFinite(pay)&&bet>0?(pay/bet).toFixed(2):"\u2014")+'</td>'
         +'<td><input type="checkbox" data-s="'+si+'" data-r="'+ri+'"'+(done?" checked":"")+' aria-label="Ticket placed"></td></tr>';
     });
     gBet+=tBet; gPay+=tPay; gTotal+=s.alts.length;
-    card.innerHTML='<h3>Strategy '+(si+1)+': '+esc(s.a1)+' + '+esc(s.a2)+' <span class="placed-count" data-sc="'+si+'">('+placedCount(si)+'/'+s.alts.length+' placed)</span></h3>'
+    card.innerHTML='<h3>Strategy '+(si+1)+': '+esc(s.a1)+' + '+esc(s.a2)+' <span class="placed-count" data-sc="'+si+'">('+placedCount(si)+'/'+s.alts.length+' placed)</span>'
+      +'<span class="stake-ctl">Bet $ <input data-si="'+si+'" data-i="st'+si+'" data-k="bet" type="number" min="0" step="any" value="'+esc(betStr)+'"></span></h3>'
       +'<table><thead><tr><th>#</th><th>Alternative</th><th class="num">Odds</th><th class="num">Bet</th>'
-      +'<th class="num">Payout</th><th class="num">Profit</th><th class="num">ROI %</th><th class="num">ROS</th><th title="Ticket placed">✓</th></tr></thead>'
+      +'<th class="num">Payout</th><th class="num">Profit</th><th class="num">ROI %</th><th class="num">ROS</th><th title="Ticket placed">\u2713</th></tr></thead>'
       +'<tbody>'+rows+'</tbody>'
       +'<tfoot><tr class="total"><td colspan="3">Strategy total</td><td class="num">'+money(tBet)+'</td>'
       +'<td class="num">'+money(tPay)+'</td><td class="num">'+money(tPay-tBet)+'</td><td></td><td></td><td></td></tr></tfoot></table>';
@@ -325,7 +333,13 @@ function renderStrategies(){
     else{ delete state.placed[key]; tr.classList.remove("done"); }
     save(); updatePlacedCounts();
   }));
+  host.querySelectorAll('input[data-k="bet"]').forEach(el=>el.addEventListener("input",e=>{
+    state.strategyBets[+e.target.dataset.si]=e.target.value;
+    save(); renderStrategies();
+  }));
+  restoreFocus(host,focus);
 }
+
 function grandPlaced(){ return Object.keys(state.placed).filter(k=>state.placed[k]).length; }
 function updatePlacedCounts(){
   STRATEGIES.forEach((s,si)=>{
