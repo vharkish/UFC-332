@@ -67,6 +67,14 @@
   #previewTable th[data-sort],#strategies th[data-ssort]{cursor:pointer;user-select:none;white-space:nowrap}
   .stake-ctl{font-size:.85rem;color:var(--muted);font-weight:400;margin-left:10px;white-space:nowrap}
   .stake-ctl input{display:inline-block;width:76px;padding:6px 8px;font-size:.9rem}
+  .tabs{display:flex;gap:10px;margin:2px 0 18px;flex-wrap:wrap}
+  .tab{padding:10px 24px;border-radius:999px;border:2px solid var(--navy);background:#fff;color:var(--navy);font-weight:800;font-size:.95rem;cursor:pointer}
+  .tab.active{background:var(--navy);color:#fff}
+  #statsTable{font-size:.82rem}
+  #statsTable th,#statsTable td{white-space:nowrap;padding:6px 8px}
+  #statsTable th[data-fs]{cursor:pointer;user-select:none}
+  .stats-tools{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+  .stats-tools input{max-width:280px}
   @media(max-width:640px){ #singleTable th:nth-child(4),#singleTable td:nth-child(4){display:none} }
 </style>
 </head>
@@ -75,6 +83,12 @@
 <h1>UFC Bet Calculator</h1>
 <p class="sub">3-leg parlays &amp; single-fighter payouts. Type the odds, everything else calculates itself. Your card auto-saves in this browser.</p>
 
+<div class="tabs">
+  <button class="tab active" data-tab="calc">Bet Calculator</button>
+  <button class="tab" data-tab="stats">Fighter Stats</button>
+</div>
+
+<div id="tab-calc">
 <div class="toolbar">
   <button class="btn-ghost" id="loadUfc332">Load UFC 332 card</button>
   <button class="btn-ghost" id="newEvent">New event (clear)</button>
@@ -126,6 +140,18 @@
     <tbody></tbody>
   </table>
 </div>
+</div><!-- /tab-calc -->
+
+<div id="tab-stats" hidden>
+<h2>Fighter Stats</h2>
+<p class="sub">Your full UFC 332 research sheet — click any column header to sort, or filter to find a fighter fast.</p>
+<div class="card">
+  <div class="stats-tools">
+    <input id="statFilter" type="text" placeholder="Filter fighters\u2026 (e.g. Silva, Brazil, KO)">
+  </div>
+  <table id="statsTable"><thead></thead><tbody></tbody></table>
+</div>
+</div><!-- /tab-stats -->
 
 <footer>For entertainment &amp; research. Know your limits — never bet more than you can afford to lose.</footer>
 
@@ -432,6 +458,46 @@ document.querySelectorAll("#previewTable th[data-sort]").forEach(th=>{
   });
 });
 
+
+/* ---------- fighter stats tab ---------- */
+const STAT_COLS=["My Prediction", "Age", "Weight", "Odds", "My Odds", "WWP", "Gemini %", "Muse Review", "Muse Method", "Striker or Grappler", "Good", "Bad", "Level", "Country", "Fighters", "Win", "Loss", "Total", "Win %", "", "KO", "KO %", "Sub", "Sub %", "Dec", "Dec %", "Finish Rate", "", "Lost by", "UFC", "Recent Wins", "Win Method", "Loss Method", "Beaten Fighters", "Lost to", "Strengths & Key Attributes", "Weaknesses / Red Flags"];
+const STAT_ROWS=[["by Dec, volume striking 29-28 by Unanimous Decision", "29", "125", "-205", "80%", "", "", "66%", "by Decision", "Taekwando, Kicks, Striker", "Fast, Volume, Power, great defense, stamina, Kicks, Striking, takedown Rose", "no grappling, but good defense", "8", "Brazil", "Natalia Silva", "20", "5", "25", "80%", "", "5", "25%", "7", "35%", "8", "40%", "60%", "", "-1K, 2S", "8", "8W/UFC/6W", "26D, 25D, 24DD, 23DK, 22KD / UFC / 19SSS, 18SSS,", "-17D, 16D, 15SSK", "Rose Namajunas, Alexa Grasso, Jessica Andrade, Viviane, Andrea, Jasmine Jasudavidius", "no one since 2017", "", ""], ["by dec", "34", "125", "170", "20%", "", "", "34%", "by Decision", "Striker", "Taller, good fight iq, striker only", "slower, no grappling, bad takedown defense", "7", "China", "Wang Cong", "10", "1", "11", "91%", "", "2", "20%", "2", "20%", "6", "60%", "40%", "", "-1S", "6", "5-1/UFC/6W", "26DD, 25DD, 24K / UFC / 24D, 23DK, 22S", "-24Sub", "Tracy corez, eduardo moura, ariana silva,", "gabriella fernandes", "", ""], ["by Dec", "28", "135 lbs", "-675", "60%", "", "66%", "85%", "by KO/TKO", "St/Grappler", "grappling, good takedowns", "", "8.5", "USA", "Payton Talbott", "11", "1", "12", "92%", "", "7", "64%", "1", "9%", "3", "27%", "73%", "", "", "6", "", "", "", "nobody - henry cejuda, felipe lima, yanis", "Raona Barsaos? wtf", "Elite length, high-volume boxing, 64% KO rate, sharp counter knees", "High stance leaves legs open to heavy calf kickers"], ["", "38", "135 lbs", "490", "40%", "", "34%", "15%", "by Submission", "Grappler", "", "", "8", "Brazil", "Deiveson Figueiredo", "25", "7", "32", "78%", "", "9", "36%", "9", "36%", "7", "28%", "72%", "", "", "", "", "", "", "nobody - Marlon Vera, Cody Garbrandt, Rob Font, Joseph Benavidez", "Cory Sandhagen(D), Brandon Moreno(K), Alexandre Pantoja(D)", "Former 2x flyweight champion, explosive guillotine choke, heavy power", "38 years old, dropping speed and volume against elite range boxers"], ["", "40", "155 lb", "195", "60%", "", "", "30%", "by Decision", "", "", "", "", "USA", "King Green", "36", "17", "53", "68%", "", "13", "36%", "10", "28%", "13", "36%", "64%", "", "", "", "", "", "", "", "", "", ""], ["", "30", "155 lb", "-238", "40%", "", "", "70%", "by KO/TKO", "", "", "", "", "Argentina", "Esteban Ribovics", "16", "3", "19", "84%", "", "8", "50%", "5", "31%", "3", "19%", "81%", "", "", "", "", "", "", "", "", "", ""], ["", "31", "170 lb", "-265", "50%", "", "", "72%", "by KO/TKO", "", "", "", "", "Croatia", "Roberto Soldic", "21", "4", "25", "84%", "", "18", "86%", "1", "5%", "2", "10%", "90%", "", "", "", "", "", "", "", "", "", ""], ["", "32", "170 lb", "215", "50%", "", "", "28%", "by KO/TKO", "", "", "", "", "USA", "Khaos Williams", "16", "5", "21", "76%", "", "9", "56%", "1", "6%", "6", "38%", "63%", "", "", "", "", "", "", "", "", "", ""], ["by KO", "24", "185 lbs", "-218", "90%", "", "36%", "68%", "by KO/TKO", "Striker", "", "", "6.5", "Cameroon", "Ateba Gautier", "11", "1", "12", "92%", "", "9", "82%", "0", "0%", "2", "18%", "82%", "", "", "", "", "", "", "", "", "", ""], ["", "33", "185 lbs", "180", "10%", "", "64%", "32%", "by KO/TKO", "Striker", "", "", "7.5", "Russia", "Roman Kopylov", "15", "5", "20", "75%", "", "12", "80%", "0", "0%", "3", "20%", "80%", "", "", "", "", "", "", "", "", "", ""], ["", "25", "125 lbs", "-155", "", "", "42%", "60%", "by KO/TKO", "Striker", "", "", "6", "Mexico", "Imanol Rodriguez", "7", "1", "8", "88%", "", "6", "86%", "1", "14%", "0", "0%", "100%", "", "", "", "", "", "", "", "", "", ""], ["by Dec", "27", "125 lbs", "130", "", "", "58%", "40%", "by Decision", "Grappler", "", "", "6.5", "USA", "Alden Coria", "13", "3", "16", "81%", "", "5", "38%", "4", "31%", "4", "31%", "69%", "", "", "", "", "", "", "", "", "", ""], ["by KO", "26", "170 lbs", "-575", "90%", "", "60%", "84%", "by KO/TKO", "Grappler", "", "", "6.5", "Aruba", "Damian Pinas", "10", "1", "11", "91%", "", "9", "90%", "1", "10%", "0", "0%", "100%", "", "", "", "", "", "", "", "", "", ""], ["", "28", "170 lbs", "425", "10%", "", "40%", "16%", "by KO/TKO", "Striker", "", "", "6", "Russia", "Andrey Pulyaev", "10", "5", "15", "67%", "", "6", "60%", "2", "20%", "2", "20%", "80%", "", "", "", "", "", "", "", "", "", ""], ["by Ko/Sub", "31", "265 lb", "-535", "90%", "", "", "80%", "by KO/TKO", "", "", "", "", "USA", "Anthony Wint", "8", "0", "8", "100%", "", "5", "63%", "2", "25%", "1", "13%", "88%", "", "", "", "", "", "", "", "", "", ""], ["loss", "30", "265 lb", "400", "10%", "", "", "20%", "by KO/TKO", "", "", "", "", "USA", "Lucas Armand", "6", "0", "6", "100%", "", "5", "83%", "0", "0%", "1", "17%", "83%", "", "", "", "", "", "", "", "", "", ""], ["", "36", "135 lb", "-485", "", "", "", "80%", "by KO/TKO", "", "", "", "", "USA", "Marcus McGhee", "11", "2", "13", "85%", "", "8", "73%", "1", "9%", "2", "18%", "82%", "", "", "", "", "", "", "", "", "", ""], ["", "29", "145 lb", "370", "", "", "", "20%", "by Decision", "", "", "", "", "Canada", "Anthony Romero", "12", "3", "15", "80%", "", "3", "25%", "1", "8%", "8", "67%", "33%", "", "", "", "", "", "", "", "", "", ""], ["by KO", "30", "265 lb", "114", "", "", "58%", "45%", "by Decision", "Striker", "", "", "7", "England", "Mick Parkin", "10", "1", "11", "91%", "", "6", "60%", "1", "10%", "3", "30%", "70%", "", "", "", "", "", "", "", "", "", ""], ["", "34", "265 lb", "-135", "", "", "42%", "55%", "by KO/TKO", "Striker", "", "", "7", "Brazil", "Johnny Walker", "22", "10", "32", "69%", "", "17", "77%", "3", "14%", "2", "9%", "91%", "", "", "", "", "", "", "", "", "", ""], ["by Dec", "30", "170 lb", "-1050", "80%", "", "60%", "90%", "by KO/TKO", "Grappler", "", "", "", "USA", "Jacobe Smith", "12", "0", "12", "100%", "", "9", "75%", "1", "8%", "2", "17%", "83%", "", "", "", "", "", "", "", "", "", ""], ["", "29", "170 lb", "675", "20%", "", "40%", "10%", "by Submission", "Striker", "", "", "", "USA", "Bruce Whitehead", "8", "2", "10", "80%", "", "2", "25%", "3", "38%", "3", "38%", "63%", "", "", "", "", "", "", "", "", "", ""], ["", "41", "155 lb", "185", "", "", "56%", "30%", "by Decision", "Grappler", "", "", "6.5", "Brazil", "Rafael Dos Anjos", "32", "17", "49", "65%", "", "5", "16%", "11", "34%", "16", "50%", "50%", "", "", "", "", "", "", "", "", "", ""], ["", "33", "155 lb", "-225", "", "", "44%", "70%", "by Decision", "Striker", "", "", "6", "USA", "Alexander Hernandez", "18", "9", "27", "67%", "", "8", "44%", "2", "11%", "8", "44%", "56%", "", "", "", "", "", "", "", "", "", ""], ["", "41", "170 lbs", "185", "", "", "56%", "30%", "by Decision", "Grappler", "", "", "6.5", "USA", "Court McGee", "23", "14", "37", "62%", "", "3", "13%", "9", "39%", "11", "48%", "52%", "", "", "", "", "", "", "", "", "", ""], ["", "29", "170 lbs", "-225", "", "", "44%", "70%", "by KO/TKO", "Striker", "", "", "6", "USA", "Eric Nolan", "8", "5", "13", "62%", "", "4", "50%", "2", "25%", "2", "25%", "75%", "", "", "", "", "", "", "", "", "", ""], ["", "33", "185", "114", "", "", "", "43", "by Decision", "Grappler", "", "", "", "Italy", "Marvin Vettori", "19", "10", "29", "0.6551724138", "", "2", "0.1052631579", "9", "0.4736842105", "8", "0.4210526316", "0.5789473684", "", "", "", "", "", "", "", "", "", ""], ["", "30", "185", "-135", "", "", "", "57", "by Decision", "Striker", "", "", "", "Morocco", "Ismail Naurdiev", "25", "8", "33", "0.7575757576", "", "13", "0.52", "6", "0.24", "6", "0.24", "0.76", "", "", "", "", "", "", "", "", "", ""]];
+let statSort=null, statFilter="";
+function statNum(v){
+  const s=String(v==null?"":v).replace(/[%$,]/g,"").trim();
+  if(s===""||s==="-") return null;
+  const n=parseFloat(s); return isFinite(n)?n:null;
+}
+function renderStats(){
+  const host=$("#statsTable");
+  let rows=STAT_ROWS.filter(r=>!statFilter||r.join(" ").toLowerCase().includes(statFilter));
+  if(statSort){
+    const i=statSort.i, dir=statSort.dir;
+    rows=rows.slice().sort((a,b)=>{
+      const na=statNum(a[i]), nb=statNum(b[i]);
+      if(na!==null&&nb!==null) return dir*(na-nb);
+      return dir*String(a[i]||"").toLowerCase().localeCompare(String(b[i]||"").toLowerCase());
+    });
+  }
+  host.querySelector("thead").innerHTML="<tr>"+STAT_COLS.map((c,i)=>"<th data-fs=\""+i+"\">"+esc(c)+(statSort&&statSort.i===i?(statSort.dir===1?" \u25B2":" \u25BC"):"")+"</th>").join("")+"</tr>";
+  host.querySelector("tbody").innerHTML=rows.map(r=>"<tr>"+r.map(c=>"<td>"+esc(c==null?"":c)+"</td>").join("")+"</tr>").join("");
+  host.querySelectorAll("th[data-fs]").forEach(th=>th.addEventListener("click",()=>{
+    const i=+th.dataset.fs, cur=statSort;
+    statSort=(cur&&cur.i===i)?{i:i,dir:-cur.dir}:{i:i,dir:1};
+    renderStats();
+  }));
+}
+$("#statFilter").addEventListener("input",e=>{ statFilter=e.target.value.toLowerCase().trim(); renderStats(); });
+
+/* ---------- tabs ---------- */
+function setTab(t){
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab===t));
+  $("#tab-calc").hidden=t!=="calc";
+  $("#tab-stats").hidden=t!=="stats";
+  state.tab=t; save();
+}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>setTab(b.dataset.tab)));
+
 /* ---------- wire up ---------- */
 $("#addAlt").addEventListener("click",()=>{
   const last=state.alts[state.alts.length-1]||{};
@@ -455,7 +521,7 @@ function backfillOdds(){
 }
 backfillOdds(); save();
 if(!state.placed) state.placed={};
-renderParlays(); renderSingles(); renderStrategies(); renderPreview();
+renderParlays(); renderSingles(); renderStrategies(); renderPreview(); renderStats(); setTab(state.tab||"calc");
 </script>
 </body>
 </html>
