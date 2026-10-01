@@ -83,6 +83,9 @@
   #statsTable td[contenteditable]:focus{background:#fffdf4;outline:2px solid var(--accent);cursor:text}
   #statsTable th .rgrip{position:absolute;top:0;bottom:0;right:-6px;width:12px;cursor:col-resize;z-index:2}
   #statsTable th.col-drop{box-shadow:inset 3px 0 0 var(--sky)}
+  #statsTable thead th.fight-th{position:sticky;left:0;z-index:3;background:#0a1a38}
+  #statsTable td.fight-cell{position:sticky;left:0;z-index:1;font-weight:800;color:#fff;background:#24457e}
+  #statsTable td.fight-cell:hover{background:#2c5294}
   .stats-tools{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
   .stats-tools input{max-width:280px}
   @media(max-width:640px){ #singleTable th:nth-child(4),#singleTable td:nth-child(4){display:none} }
@@ -154,7 +157,7 @@
 
 <div id="tab-stats" hidden>
 <h2>Fighter Stats</h2>
-<p class="sub">Your full UFC 332 research sheet — click any column header to sort, or filter to find a fighter fast.</p>
+<p class="sub">Your full UFC 332 research sheet — each fight stays together as one unit, however you sort. Click a header to sort, drag headers to rearrange, drag a header’s right edge to resize, click any cell to edit.</p>
 <div class="card">
   <div class="stats-tools">
     <input id="statFilter" type="text" placeholder="Filter fighters… (e.g. Silva, Brazil, KO)">
@@ -477,7 +480,11 @@ let dragColIdx=null, lastDropTs=0, resizeState=null, justResizedTs=0;
 const STAT_W64=[1,12,15,16,17,20,22,24,29];
 const STAT_W200=[0,10,11,31,32,33,34,35,36];
 function defaultColW(ci){ return STAT_W64.indexOf(ci)>=0?64:STAT_W200.indexOf(ci)>=0?200:110; }
-function colW(ci){ return (state.statColWidths&&state.statColWidths[ci])||defaultColW(ci); }
+function colW(ci){
+  if(state.statColWidths&&state.statColWidths[ci]!==undefined) return state.statColWidths[ci];
+  if(ci==="fight") return 210;
+  return defaultColW(ci);
+}
 function statNum(v){
   const s=String(v==null?"":v).replace(/[%$,]/g,"").trim();
   if(s===""||s==="-") return null;
@@ -493,31 +500,59 @@ function sval(r,ci){
   const k=r+"-"+ci;
   return (state.statEdits&&state.statEdits[k]!==undefined)?state.statEdits[k]:STAT_ROWS[r][ci];
 }
+function fightLabel(p){
+  const a=sval(2*p,14), b=sval(2*p+1,14);
+  return (a||"?")+" vs. "+(b||"?");
+}
+function pairMatches(p){
+  const ra=2*p, rb=2*p+1, q=statFilter;
+  const hit=r=>state.statColOrder.some(ci=>String(sval(r,ci)||"").toLowerCase().indexOf(q)>=0);
+  return hit(ra)||hit(rb)||fightLabel(p).toLowerCase().indexOf(q)>=0;
+}
+function pairVal(p,ci,dir){
+  let vals;
+  if(ci==="fight"){ const l=fightLabel(p).toLowerCase(); vals=[l,l]; }
+  else vals=[sval(2*p,ci),sval(2*p+1,ci)];
+  const na=statNum(vals[0]), nb=statNum(vals[1]);
+  if(na!==null&&nb!==null) return {n:true, v:dir===1?Math.min(na,nb):Math.max(na,nb)};
+  const sa=String(vals[0]||"").toLowerCase(), sb=String(vals[1]||"").toLowerCase();
+  return {n:false, v:dir===1?(sa<=sb?sa:sb):(sa>=sb?sa:sb)};
+}
 function renderStats(){
   const host=$("#statsTable");
   if(!state.statEdits) state.statEdits={};
   if(!state.statColWidths) state.statColWidths={};
   if(!state.statColOrder||state.statColOrder.length!==STAT_COLS.length) state.statColOrder=STAT_COLS.map((_,i)=>i);
   const order=state.statColOrder;
-  let ridx=STAT_ROWS.map((_,r)=>r);
-  if(statFilter) ridx=ridx.filter(r=>order.some(ci=>String(sval(r,ci)||"").toLowerCase().indexOf(statFilter)>=0));
+  let pairs=[];
+  for(let p=0;p<STAT_ROWS.length/2;p++) if(!statFilter||pairMatches(p)) pairs.push(p);
   if(statSort){
     const ci=statSort.i, dir=statSort.dir;
-    ridx=ridx.slice().sort((a,b)=>{
-      const na=statNum(sval(a,ci)), nb=statNum(sval(b,ci));
-      if(na!==null&&nb!==null) return dir*(na-nb);
-      return dir*String(sval(a,ci)||"").toLowerCase().localeCompare(String(sval(b,ci)||"").toLowerCase());
+    pairs=pairs.slice().sort((pa,pb)=>{
+      const ka=pairVal(pa,ci,dir), kb=pairVal(pb,ci,dir);
+      let c;
+      if(ka.n&&kb.n) c=ka.v-kb.v;
+      else if(ka.n) c=-1;
+      else if(kb.n) c=1;
+      else c=String(ka.v).localeCompare(String(kb.v));
+      return dir*c;
     });
   }
-  const plain=(!statSort&&!statFilter);
-  let html="<colgroup>"+order.map(ci=>'<col data-c="'+ci+'" style="width:'+colW(ci)+'px">').join("")+"</colgroup>";
-  html+="<thead><tr>"+order.map(ci=>'<th data-fs="'+ci+'" draggable="true"><span class="th-label">'+esc(STAT_COLS[ci])+(statSort&&statSort.i===ci?(statSort.dir===1?" \u25B2":" \u25BC"):"")+'</span><span class="rgrip"></span></th>').join("")+"</tr></thead><tbody>";
-  ridx.forEach((r,di)=>{
-    html+="<tr>"+order.map(ci=>{
-      const v=sval(r,ci), disp=ci===3?fmtOdds(v):(v==null?"":v);
-      return '<td data-r="'+r+'" data-c="'+ci+'" contenteditable="true" spellcheck="false"'+(ci===14?' class="fighter-name"':'')+' title="'+esc(String(v==null?"":v))+'">'+esc(String(disp))+"</td>";
-    }).join("")+"</tr>";
-    if(plain&&di%2===1&&di<ridx.length-1) html+='<tr class="sep"><td colspan="'+order.length+'"></td></tr>';
+  const ncol=order.length+1;
+  let html="<colgroup>"+'<col data-c="fight" style="width:'+colW("fight")+'px">'+order.map(ci=>'<col data-c="'+ci+'" style="width:'+colW(ci)+'px">').join("")+"</colgroup>";
+  const fs=statSort&&statSort.i==="fight"?(statSort.dir===1?" \u25B2":" \u25BC"):"";
+  html+='<thead><tr><th data-fs="fight" class="fight-th"><span class="th-label">Fight'+fs+'</span><span class="rgrip"></span></th>'
+    +order.map(ci=>'<th data-fs="'+ci+'" draggable="true"><span class="th-label">'+esc(STAT_COLS[ci])+(statSort&&statSort.i===ci?(statSort.dir===1?" \u25B2":" \u25BC"):"")+'</span><span class="rgrip"></span></th>').join("")+"</tr></thead><tbody>";
+  pairs.forEach((p,pi)=>{
+    const fl=fightLabel(p);
+    [2*p,2*p+1].forEach(r=>{
+      html+='<tr><td class="fight-cell" title="'+esc(fl)+'">'+esc(fl)+"</td>"
+        +order.map(ci=>{
+          const v=sval(r,ci), disp=ci===3?fmtOdds(v):(v==null?"":v);
+          return '<td data-r="'+r+'" data-c="'+ci+'" contenteditable="true" spellcheck="false"'+(ci===14?' class="fighter-name"':'')+' title="'+esc(String(v==null?"":v))+'">'+esc(String(disp))+"</td>";
+        }).join("")+"</tr>";
+    });
+    if(pi<pairs.length-1) html+='<tr class="sep"><td colspan="'+ncol+'"></td></tr>';
   });
   html+="</tbody>";
   host.innerHTML=html;
@@ -526,13 +561,14 @@ function renderStats(){
 }
 function wireStatsHeaders(host){
   host.querySelectorAll("th[data-fs]").forEach(th=>{
-    const ci=+th.dataset.fs;
+    const raw=th.dataset.fs, ci=raw==="fight"?"fight":+raw;
     th.addEventListener("click",()=>{
       if(Date.now()-lastDropTs<400||Date.now()-justResizedTs<400) return;
       const cur=statSort;
       statSort=(cur&&cur.i===ci)?{i:ci,dir:-cur.dir}:{i:ci,dir:1};
       renderStats();
     });
+    if(raw!=="fight"){
     th.addEventListener("dragstart",e=>{
       if(resizeState){ e.preventDefault(); return; }
       dragColIdx=ci; e.dataTransfer.effectAllowed="move";
@@ -548,6 +584,7 @@ function wireStatsHeaders(host){
       o.splice(ti,0,o.splice(fi,1)[0]);
       state.statColOrder=o; save(); lastDropTs=Date.now(); renderStats();
     });
+    }
     th.querySelector(".rgrip").addEventListener("mousedown",e=>{
       e.stopPropagation(); e.preventDefault();
       th.draggable=false;
@@ -592,7 +629,7 @@ document.addEventListener("mouseup",()=>{
   const w=col?parseInt(col.style.width,10)||resizeState.startW:resizeState.startW;
   state.statColWidths[resizeState.ci]=w; save();
   if(resizeState.moved) justResizedTs=Date.now();
-  document.querySelectorAll("#statsTable th").forEach(th=>{ th.draggable=true; });
+  document.querySelectorAll('#statsTable th[data-fs]').forEach(th=>{ th.draggable=(th.dataset.fs!=="fight"); });
   resizeState=null;
 });
 $("#statFilter").addEventListener("input",e=>{ statFilter=e.target.value.toLowerCase().trim(); renderStats(); });
