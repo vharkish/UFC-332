@@ -468,6 +468,12 @@ function statNum(v){
   if(s===""||s==="-") return null;
   const n=parseFloat(s); return isFinite(n)?n:null;
 }
+function fmtOdds(v){
+  const s=String(v==null?"":v).trim();
+  if(s===""||s[0]==="+"||s[0]==="-") return s;
+  const n=parseFloat(s);
+  return isFinite(n)&&n>0 ? "+"+s : s;
+}
 function renderStats(){
   const host=$("#statsTable");
   let rows=STAT_ROWS.filter(r=>!statFilter||r.join(" ").toLowerCase().includes(statFilter));
@@ -480,7 +486,7 @@ function renderStats(){
     });
   }
   host.querySelector("thead").innerHTML="<tr>"+STAT_COLS.map((c,i)=>"<th data-fs=\""+i+"\">"+esc(c)+(statSort&&statSort.i===i?(statSort.dir===1?" \u25B2":" \u25BC"):"")+"</th>").join("")+"</tr>";
-  host.querySelector("tbody").innerHTML=rows.map(r=>"<tr>"+r.map(c=>"<td>"+esc(c==null?"":c)+"</td>").join("")+"</tr>").join("");
+  host.querySelector("tbody").innerHTML=rows.map(r=>"<tr>"+r.map((c,ci)=>"<td>"+esc(ci===3?fmtOdds(c):(c==null?"":c))+"</td>").join("")+"</tr>").join("");
   host.querySelectorAll("th[data-fs]").forEach(th=>th.addEventListener("click",()=>{
     const i=+th.dataset.fs, cur=statSort;
     statSort=(cur&&cur.i===i)?{i:i,dir:-cur.dir}:{i:i,dir:1};
