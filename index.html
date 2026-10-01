@@ -194,10 +194,16 @@ function renderSingles(){
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
 
 /* ---------- wire up ---------- */
-$("#a1name").addEventListener("input",e=>{ state.a1name=e.target.value; save(); renderParlays(); });
-$("#a1odds").addEventListener("input",e=>{ state.a1odds=e.target.value; save(); renderParlays(); });
-$("#a2name").addEventListener("input",e=>{ state.a2name=e.target.value; save(); renderParlays(); });
-$("#a2odds").addEventListener("input",e=>{ state.a2odds=e.target.value; save(); renderParlays(); });
+function anchorWire(nameSel, oddsSel, key){
+  $(nameSel).addEventListener("input",e=>{
+    state[key+"name"]=e.target.value;
+    if(!state[key+"odds"]){ const o=oddsOf(e.target.value); if(o!==""){ state[key+"odds"]=o; $(oddsSel).value=o; } }
+    save(); renderParlays();
+  });
+  $(oddsSel).addEventListener("input",e=>{ state[key+"odds"]=e.target.value; save(); renderParlays(); });
+}
+anchorWire("#a1name","#a1odds","a1");
+anchorWire("#a2name","#a2odds","a2");
 $("#addAlt").addEventListener("click",()=>{ state.alts.push({name:"",odds:"",bet:"10"}); save(); renderParlays(); });
 $("#addSingle").addEventListener("click",()=>{ state.singles.push({name:"",odds:"",bet:"100"}); save(); renderSingles(); });
 $("#loadUfc332").addEventListener("click",()=>{ refreshDatalist(); save(); renderParlays(); renderSingles(); alert("UFC 332 card loaded — fighter names now autocomplete with odds."); });
@@ -206,7 +212,12 @@ $("#newEvent").addEventListener("click",()=>{ if(confirm("Clear everything and s
 function syncAnchors(){ $("#a1name").value=state.a1name; $("#a1odds").value=state.a1odds; $("#a2name").value=state.a2name; $("#a2odds").value=state.a2odds; }
 
 /* ---------- init ---------- */
-load(); refreshDatalist(); syncAnchors(); renderParlays(); renderSingles();
+load(); refreshDatalist();
+/* backfill anchor odds from the card when a name is saved but odds are empty */
+[["a1name","a1odds"],["a2name","a2odds"]].forEach(([nk,ok])=>{
+  if(state[nk] && !state[ok]){ const v=oddsOf(state[nk]); if(v!=="") state[ok]=v; }
+});
+syncAnchors(); renderParlays(); renderSingles();
 </script>
 </body>
 </html>
