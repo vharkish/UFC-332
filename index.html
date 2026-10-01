@@ -120,9 +120,23 @@ function refreshDatalist(){
   UFC332.forEach(([n])=>{ const o=document.createElement("option"); o.value=n; dl.appendChild(o); });
 }
 
+/* keep typing focus across table re-renders */
+function keepFocus(tbody){
+  const a=document.activeElement;
+  if(!a||!a.dataset||a.dataset.i===undefined||!tbody.contains(a)) return null;
+  return {i:a.dataset.i,k:a.dataset.k,s:a.selectionStart,e:a.selectionEnd};
+}
+function restoreFocus(tbody,f){
+  if(!f) return;
+  const el=tbody.querySelector('input[data-i="'+f.i+'"][data-k="'+f.k+'"]');
+  if(el){ el.focus(); try{ el.setSelectionRange(f.s,f.e); }catch(_){} }
+}
+
 /* ---------- parlay table ---------- */
 function renderParlays(){
-  const tb=$("#parlayTable tbody"); tb.innerHTML="";
+  const tb=$("#parlayTable tbody");
+  const focus=keepFocus(tb);
+  tb.innerHTML="";
   const d1=dec(state.a1odds), d2=dec(state.a2odds);
   let totBet=0, totPay=0;
   state.alts.forEach((r,i)=>{
@@ -149,18 +163,27 @@ function renderParlays(){
     ? `<tr class="total"><td colspan="3">Total (${state.alts.length} tickets)</td><td class="num">${money(totBet)}</td><td></td><td class="num">${money(totPay)}</td><td class="num">${money(totPay-totBet)}</td><td></td><td></td></tr>` : "";
   tb.querySelectorAll("input").forEach(el=>el.addEventListener("input",e=>{
     const i=+e.target.dataset.i, k=e.target.dataset.k;
-    state.alts[i][k]=e.target.value;
-    if(k==="name" && !state.alts[i].odds){ const o=oddsOf(e.target.value); if(o!=="") state.alts[i].odds=o; }
+    if(k==="name"){
+      state.alts[i].name=e.target.value;
+      const o=oddsOf(e.target.value);
+      if(o!=="" && !state.alts[i].oddsManual) state.alts[i].odds=o;
+    }else{
+      state.alts[i][k]=e.target.value;
+      if(k==="odds") state.alts[i].oddsManual=true;
+    }
     save(); renderParlays();
   }));
   tb.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",e=>{
     state.alts.splice(+e.target.dataset.del,1); save(); renderParlays();
   }));
+  restoreFocus(tb,focus);
 }
 
 /* ---------- singles table ---------- */
 function renderSingles(){
-  const tb=$("#singleTable tbody"); tb.innerHTML="";
+  const tb=$("#singleTable tbody");
+  const focus=keepFocus(tb);
+  tb.innerHTML="";
   let totBet=0, totPay=0;
   state.singles.forEach((r,i)=>{
     const d=dec(r.odds), bet=parseFloat(r.bet)||0;
@@ -183,13 +206,20 @@ function renderSingles(){
     ? `<tr class="total"><td colspan="3">Total (${state.singles.length} bets)</td><td class="num">${money(totBet)}</td><td class="num">${money(totPay)}</td><td class="num">${money(totPay-totBet)}</td><td></td><td></td></tr>` : "";
   tb.querySelectorAll("input").forEach(el=>el.addEventListener("input",e=>{
     const i=+e.target.dataset.i, k=e.target.dataset.k;
-    state.singles[i][k]=e.target.value;
-    if(k==="name" && !state.singles[i].odds){ const o=oddsOf(e.target.value); if(o!=="") state.singles[i].odds=o; }
+    if(k==="name"){
+      state.singles[i].name=e.target.value;
+      const o=oddsOf(e.target.value);
+      if(o!=="" && !state.singles[i].oddsManual) state.singles[i].odds=o;
+    }else{
+      state.singles[i][k]=e.target.value;
+      if(k==="odds") state.singles[i].oddsManual=true;
+    }
     save(); renderSingles();
   }));
   tb.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",e=>{
     state.singles.splice(+e.target.dataset.del,1); save(); renderSingles();
   }));
+  restoreFocus(tb,focus);
 }
 
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
@@ -198,10 +228,10 @@ function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,
 function anchorWire(nameSel, oddsSel, key){
   $(nameSel).addEventListener("input",e=>{
     state[key+"name"]=e.target.value;
-    if(!state[key+"odds"]){ const o=oddsOf(e.target.value); if(o!==""){ state[key+"odds"]=o; $(oddsSel).value=o; } }
+    if(!state[key+"oddsManual"]){ const o=oddsOf(e.target.value); if(o!==""){ state[key+"odds"]=o; $(oddsSel).value=o; } }
     save(); renderParlays();
   });
-  $(oddsSel).addEventListener("input",e=>{ state[key+"odds"]=e.target.value; save(); renderParlays(); });
+  $(oddsSel).addEventListener("input",e=>{ state[key+"odds"]=e.target.value; state[key+"oddsManual"]=true; save(); renderParlays(); });
 }
 anchorWire("#a1name","#a1odds","a1");
 anchorWire("#a2name","#a2odds","a2");
