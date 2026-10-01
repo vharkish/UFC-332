@@ -45,6 +45,7 @@
   footer{color:var(--muted);font-size:.8rem;margin-top:32px;text-align:center}
   #parlayTable input[data-k$="name"]{min-width:140px}
   #parlayTable input[type=number]{min-width:88px}
+  #previewTable th[data-sort]{cursor:pointer;user-select:none;white-space:nowrap}
   @media(max-width:640px){ #singleTable th:nth-child(4),#singleTable td:nth-child(4){display:none} }
 </style>
 </head>
@@ -98,8 +99,8 @@
   </div>
   <table id="previewTable">
     <thead><tr>
-      <th>#</th><th>Fighter</th><th class="num">Odds</th><th class="num">Bet $</th>
-      <th class="num">Payout</th><th class="num">Profit</th><th class="num">ROI %</th>
+      <th>#</th><th data-sort="name">Fighter</th><th class="num" data-sort="odds">Odds</th><th class="num">Bet $</th>
+      <th class="num" data-sort="pay">Payout</th><th class="num" data-sort="prof">Profit</th><th class="num" data-sort="roi">ROI %</th>
     </tr></thead>
     <tbody></tbody>
   </table>
@@ -334,26 +335,39 @@ function updatePlacedCounts(){
   const ge=document.querySelector('[data-gplaced]'); if(ge) ge.textContent=grandPlaced();
 }
 
-/* ---------- single-fighter preview: full card, pre-filled ---------- */
+/* ---------- single-fighter preview: full card, pre-filled, sortable ---------- */
+let previewSort={key:"roi",dir:-1};
 function renderPreview(){
   const tb=$("#previewTable tbody"); tb.innerHTML="";
   const stake=parseFloat($("#previewStake").value)||0;
+  const k=previewSort.key, dir=previewSort.dir;
   UFC332
-    .map(([name,odds])=>({name,odds,d:dec(odds)}))
-    .sort((a,b)=>b.d-a.d)
+    .map(([name,odds])=>{ const d=dec(odds), pay=stake*d; return {name:name,odds:odds,d:d,pay:pay,prof:pay-stake,roi:d-1}; })
+    .sort((a,b)=> typeof a[k]==="string" ? dir*a[k].localeCompare(b[k]) : dir*(a[k]-b[k]))
     .forEach((r,i)=>{
-      const pay=stake*r.d, prof=pay-stake;
       const tr=document.createElement("tr");
       tr.innerHTML='<td>'+(i+1)+'</td><td>'+esc(r.name)+'</td>'
         +'<td class="num">'+(r.odds>0?"+":"")+r.odds+'</td>'
         +'<td class="num">'+money(stake)+'</td>'
-        +'<td class="num">'+money(pay)+'</td>'
-        +'<td class="num '+(prof>0?"pos":prof<0?"neg":"")+'">'+money(prof)+'</td>'
-        +'<td class="num">'+pct(r.d-1)+'</td>';
+        +'<td class="num">'+money(r.pay)+'</td>'
+        +'<td class="num '+(r.prof>0?"pos":r.prof<0?"neg":"")+'">'+money(r.prof)+'</td>'
+        +'<td class="num">'+pct(r.roi)+'</td>';
       tb.appendChild(tr);
     });
+  document.querySelectorAll("#previewTable th[data-sort]").forEach(th=>{
+    const key=th.dataset.sort, base=th.textContent.replace(/ [\u25B2\u25BC]$/,"");
+    th.textContent=base+(key===k?(dir===1?" \u25B2":" \u25BC"):"");
+  });
 }
 $("#previewStake").addEventListener("input",renderPreview);
+document.querySelectorAll("#previewTable th[data-sort]").forEach(th=>{
+  th.addEventListener("click",()=>{
+    const key=th.dataset.sort;
+    if(previewSort.key===key) previewSort.dir*=-1;
+    else previewSort={key:key,dir:key==="name"?1:-1};
+    renderPreview();
+  });
+});
 
 /* ---------- wire up ---------- */
 $("#addAlt").addEventListener("click",()=>{
