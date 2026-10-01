@@ -90,6 +90,21 @@
 <p class="sub">Your master plan — tick each ticket as you place it.</p>
 <div id="strategies"></div>
 
+<h2>Single Fighter Bets</h2>
+<p class="sub">The full UFC 332 card with preset odds already filled in — preview every payout, profit and ROI to spot the best bang for your buck. Sorted by ROI, highest first.</p>
+<div class="card">
+  <div class="row" style="align-items:end">
+    <div class="field"><label for="previewStake">Preview stake $</label><input id="previewStake" type="number" min="0" step="any" value="100" style="max-width:110px"></div>
+  </div>
+  <table id="previewTable">
+    <thead><tr>
+      <th>#</th><th>Fighter</th><th class="num">Odds</th><th class="num">Bet $</th>
+      <th class="num">Payout</th><th class="num">Profit</th><th class="num">ROI %</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
 <footer>For entertainment &amp; research. Know your limits — never bet more than you can afford to lose.</footer>
 
 <script>
@@ -319,6 +334,27 @@ function updatePlacedCounts(){
   const ge=document.querySelector('[data-gplaced]'); if(ge) ge.textContent=grandPlaced();
 }
 
+/* ---------- single-fighter preview: full card, pre-filled ---------- */
+function renderPreview(){
+  const tb=$("#previewTable tbody"); tb.innerHTML="";
+  const stake=parseFloat($("#previewStake").value)||0;
+  UFC332
+    .map(([name,odds])=>({name,odds,d:dec(odds)}))
+    .sort((a,b)=>b.d-a.d)
+    .forEach((r,i)=>{
+      const pay=stake*r.d, prof=pay-stake;
+      const tr=document.createElement("tr");
+      tr.innerHTML='<td>'+(i+1)+'</td><td>'+esc(r.name)+'</td>'
+        +'<td class="num">'+(r.odds>0?"+":"")+r.odds+'</td>'
+        +'<td class="num">'+money(stake)+'</td>'
+        +'<td class="num">'+money(pay)+'</td>'
+        +'<td class="num '+(prof>0?"pos":prof<0?"neg":"")+'">'+money(prof)+'</td>'
+        +'<td class="num">'+pct(r.d-1)+'</td>';
+      tb.appendChild(tr);
+    });
+}
+$("#previewStake").addEventListener("input",renderPreview);
+
 /* ---------- wire up ---------- */
 $("#addAlt").addEventListener("click",()=>{
   const last=state.alts[state.alts.length-1]||{};
@@ -327,7 +363,7 @@ $("#addAlt").addEventListener("click",()=>{
 });
 $("#addSingle").addEventListener("click",()=>{ state.singles.push({name:"",odds:"",bet:"100"}); save(); renderSingles(); });
 $("#loadUfc332").addEventListener("click",()=>{ refreshDatalist(); save(); renderParlays(); renderSingles(); alert("UFC 332 card loaded — fighter names now autocomplete with odds."); });
-$("#newEvent").addEventListener("click",()=>{ if(confirm("Clear everything and start a new event?")){ state={a1name:"",a1odds:"",a2name:"",a2odds:"",alts:[],singles:[],card:[],placed:{}}; save(); renderParlays(); renderSingles(); renderStrategies(); } });
+$("#newEvent").addEventListener("click",()=>{ if(confirm("Clear everything and start a new event?")){ state={alts:[],singles:[],card:[],placed:{}}; save(); renderParlays(); renderSingles(); renderStrategies(); } });
 
 /* ---------- init ---------- */
 load(); refreshDatalist();
@@ -342,7 +378,7 @@ function backfillOdds(){
 }
 backfillOdds(); save();
 if(!state.placed) state.placed={};
-renderParlays(); renderSingles(); renderStrategies();
+renderParlays(); renderSingles(); renderStrategies(); renderPreview();
 </script>
 </body>
 </html>
