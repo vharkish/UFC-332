@@ -244,10 +244,16 @@ function syncAnchors(){ $("#a1name").value=state.a1name; $("#a1odds").value=stat
 
 /* ---------- init ---------- */
 load(); refreshDatalist();
-/* backfill anchor odds from the card when a name is saved but odds are empty */
-[["a1name","a1odds"],["a2name","a2odds"]].forEach(([nk,ok])=>{
-  if(state[nk] && !state[ok]){ const v=oddsOf(state[nk]); if(v!=="") state[ok]=v; }
-});
+/* backfill/correct odds from the card for names that were never hand-edited */
+function backfillOdds(){
+  [["a1name","a1odds","a1oddsManual"],["a2name","a2odds","a2oddsManual"]].forEach(([nk,ok,mk])=>{
+    if(state[nk] && !state[mk]){ const o=oddsOf(state[nk]); if(o!=="" && String(state[ok])!==String(o)) state[ok]=o; }
+  });
+  [state.alts, state.singles].forEach(list=>list.forEach(r=>{
+    if(r.name && !r.oddsManual){ const o=oddsOf(r.name); if(o!=="" && String(r.odds)!==String(o)) r.odds=o; }
+  }));
+}
+backfillOdds(); save();
 syncAnchors(); renderParlays(); renderSingles();
 </script>
 </body>
